@@ -867,7 +867,7 @@
           { id: "transaction", name: "Phí xử lý giao dịch", note: "Shopee mặc định 6%", rate: 6, amount: 0, enabled: true, base: "payment" },
           { id: "infra", name: "Phí hạ tầng", note: "Cố định trên mỗi đơn", rate: 0, amount: 3000, enabled: true, base: "order" },
           { id: "piship", name: "Phí PiShip", note: "Nếu shop đang dùng", rate: 0, amount: 2700, enabled: false, base: "order" },
-          { id: "voucherxtra", name: "Voucher Xtra", note: "Gói shop tự tham gia", rate: 4, amount: 0, enabled: false, base: "netItem" },
+          { id: "voucherxtra", name: "Voucher Xtra", note: "5,5%, tối đa 50.000đ/đơn", rate: 5.5, amount: 0, capAmount: 50000, enabled: false, base: "netItem" },
           { id: "vat", name: "Thuế GTGT", note: "Mặc định hộ/cá nhân", rate: 1, amount: 0, enabled: true, base: "netItem" },
           { id: "incomeTax", name: "Thuế TNCN/TNDN", note: "Tính theo cấu hình kinh doanh", rate: 0.5, amount: 0, enabled: true, base: "profitBeforeIncomeTax" }
         ],
@@ -892,7 +892,7 @@
           { id: "commission", name: "Hoa hồng nền tảng", note: "Theo ngành hàng", rate: 12.5, amount: 0, enabled: true, base: "netItem" },
           { id: "transaction", name: "Phí giao dịch", note: "TikTok Shop mặc định 6%", rate: 6, amount: 0, enabled: true, base: "payment" },
           { id: "processing", name: "Phí xử lý đơn hàng", note: "Cố định trên mỗi đơn", rate: 0, amount: 3000, enabled: true, base: "order" },
-          { id: "voucherxtra", name: "Voucher Xtra", note: "Nếu shop tham gia", rate: 4, amount: 0, enabled: false, base: "netItem" },
+          { id: "voucherxtra", name: "Voucher Xtra", note: "5,5%, tối đa 50.000đ/đơn", rate: 5.5, amount: 0, capAmount: 50000, enabled: false, base: "netItem" },
           { id: "vat", name: "Thuế GTGT", note: "Mặc định hộ/cá nhân", rate: 1, amount: 0, enabled: true, base: "netItem" },
           { id: "incomeTax", name: "Thuế TNCN/TNDN", note: "Tính theo cấu hình kinh doanh", rate: 0.5, amount: 0, enabled: true, base: "profitBeforeIncomeTax" }
         ],
@@ -1034,12 +1034,17 @@
       return Math.max(0, values.netItem);
     }
 
+    function feeTotal(fee, values) {
+      const raw = feeBase(fee.base, values, fee) * (Number(fee.rate) || 0) / 100 + (Number(fee.amount) || 0) * values.orders;
+      const cap = Number(fee.capAmount) || 0;
+      return cap > 0 ? Math.min(raw, cap * values.orders) : raw;
+    }
+
     function calcFees(list, values, skipIncomeTax = false) {
       return list.reduce((sum, fee) => {
         if (!fee.enabled) return sum;
         if (skipIncomeTax && fee.id === "incomeTax") return sum;
-        const amount = feeBase(fee.base, values, fee) * (Number(fee.rate) || 0) / 100 + (Number(fee.amount) || 0) * values.orders;
-        return sum + amount;
+        return sum + feeTotal(fee, values);
       }, 0);
     }
 
@@ -1058,7 +1063,7 @@
       values.profitBeforeIncomeTax = netItem - cost - fixedBeforeIncomeTax - variableTotal;
       const incomeTaxFee = state.fees.fixed.find(f => f.id === "incomeTax");
       const incomeTax = incomeTaxFee && incomeTaxFee.enabled
-        ? feeBase(incomeTaxFee.base, values, incomeTaxFee) * (Number(incomeTaxFee.rate) || 0) / 100 + (Number(incomeTaxFee.amount) || 0) * orders
+        ? feeTotal(incomeTaxFee, values)
         : 0;
       const fixedTotal = fixedBeforeIncomeTax + incomeTax;
       const netProfit = netItem - cost - fixedTotal - variableTotal;
@@ -1102,7 +1107,7 @@
           profitBeforeIncomeTax: 0
         }, true) - result.variableTotal
       };
-      return fee.enabled ? feeBase(fee.base, values, fee) * (Number(fee.rate) || 0) / 100 + (Number(fee.amount) || 0) * result.orders : 0;
+      return fee.enabled ? feeTotal(fee, values) : 0;
     }
 
     function renderFees(type, result) {
